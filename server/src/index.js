@@ -2,14 +2,65 @@ import express from 'express';
 import cors from 'cors';
 import bcrypt from 'bcryptjs';
 import db from './database.js';
-import { generateToken, verifyToken, requireAdmin } from './auth.js';
+import { generateToken, verifyToken, requireAdmin, checkSubscription } from './auth.js';
 
 const app = express();
 const PORT = 3000;
 
 const ADMIN_EMAILS = ['admin@r4academy.com', 'seu@email.com'];
+const CAKTO_WEBHOOK_SECRET = process.env.CAKTO_WEBHOOK_SECRET || 'change-this-secret';
 
 app.use(cors());
+
+app.post('/api/webhooks/cakto', express.raw({ type: 'application/json' }), (req, res) => {
+  try {
+    const signature = req.headers['x-cakto-signature'];
+    const secret = CAKTO_WEBHOOK_SECRET;
+    
+    if (!signature || signature !== secret) {
+      console.log('Invalid webhook signature');
+      return res.status(401).json({ error: 'Unauthorized' });
+    }
+    
+    const payload = JSON.parse(req.body.toString());
+    
+    if (payload.event === 'compra aprovada' || payload.event === 'purchase.approved') {
+      const customerEmail = payload.customer?.email;
+      
+      if (customerEmail) {
+        const user = db.prepare('SELECT * FROM users WHERE email = ?').get(customerEmail);
+        
+        if (user) {
+          const existing = db.prepare('SELECT * FROM subscriptions WHERE user_id = ?').get(user.id);
+          
+          const expiresAt = new Date();
+          expiresAt.setMonth(expiresAt.getMonth() + 1);
+          
+          if (existing) {
+            db.prepare(`
+              UPDATE subscriptions 
+              SET status = 'active', expires_at = ?, plan_type = 'premium' 
+              WHERE user_id = ?
+            `).run(expiresAt.toISOString(), user.id);
+          } else {
+            db.prepare(`
+              INSERT INTO subscriptions (user_id, status, plan_type, expires_at) 
+              VALUES (?, 'active', 'premium', ?)
+            `).run(user.id, expiresAt.toISOString());
+          }
+          
+          console.log(`Subscription activated for user ${user.email}`);
+        }
+      }
+    }
+    
+    res.json({ received: true });
+  } catch (error) {
+    console.error('Webhook error:', error);
+    res.status(500).json({ error: 'Webhook processing failed' });
+  }
+});
+
 app.use(express.json());
 
 app.post('/api/auth/register', async (req, res) => {
@@ -107,6 +158,20 @@ app.get('/api/subscription/status', verifyToken, (req, res) => {
   });
 });
 
+app.post('/api/payment/create-checkout', verifyToken, async (req, res) => {
+  try {
+    const user = db.prepare('SELECT * FROM users WHERE id = ?').get(req.user.id);
+    
+    const checkoutUrl = `https://pay.cakto.com.br/checkout?product_id=${process.env.CAKTO_PRODUCT_ID || 'PRODUCT_ID'}&customer_email=${encodeURIComponent(user.email)}&customer_name=${encodeURIComponent(user.name)}`;
+    
+    res.json({ checkoutUrl });
+  } catch (error) {
+    console.error('Checkout error:', error);
+    res.status(500).json({ error: 'Failed to create checkout' });
+  }
+});
+
+
 app.get('/api/courses', verifyToken, (req, res) => {
   const courses = db.prepare(`
     SELECT c.*, COUNT(l.id) as lesson_count
@@ -202,7 +267,7 @@ app.post('/api/lessons/:id/complete', verifyToken, (req, res) => {
   res.json({ success: true });
 });
 
-app.get('/api/chat/history/:agentType', verifyToken, (req, res) => {
+app.get('/api/chat/history/:agentType', verifyToken, checkSubscription(db), (req, res) => {
   const history = db.prepare(
     'SELECT * FROM ai_chat_history WHERE user_id = ? AND agent_type = ? ORDER BY created_at ASC'
   ).all(req.user.id, req.params.agentType);
@@ -210,7 +275,7 @@ app.get('/api/chat/history/:agentType', verifyToken, (req, res) => {
   res.json(history);
 });
 
-app.post('/api/chat/history', verifyToken, (req, res) => {
+app.post('/api/chat/history', verifyToken, checkSubscription(db), (req, res) => {
   const { agent_type, role, content, image_url } = req.body;
   
   const result = db.prepare(
@@ -220,6 +285,7 @@ app.post('/api/chat/history', verifyToken, (req, res) => {
   res.json({ id: result.lastInsertRowid });
 });
 
-app.listen(PORT, 'localhost', () => {
-  console.log(`Server running on http://localhost:${PORT}`);
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Backend ready to accept connections`);
 });

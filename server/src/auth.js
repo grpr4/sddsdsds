@@ -33,6 +33,22 @@ export function requireAdmin(req, res, next) {
   next();
 }
 
-export function checkSubscription(req, res, next) {
-  next();
+export function checkSubscription(db) {
+  return (req, res, next) => {
+    const subscription = db.prepare(
+      'SELECT * FROM subscriptions WHERE user_id = ? AND status = ?'
+    ).get(req.user.id, 'active');
+    
+    if (!subscription) {
+      return res.status(403).json({ error: 'Active subscription required' });
+    }
+    
+    const expiresAt = new Date(subscription.expires_at);
+    if (expiresAt < new Date()) {
+      db.prepare('UPDATE subscriptions SET status = ? WHERE id = ?').run('inactive', subscription.id);
+      return res.status(403).json({ error: 'Subscription expired' });
+    }
+    
+    next();
+  };
 }

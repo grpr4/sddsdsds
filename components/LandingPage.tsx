@@ -1,10 +1,12 @@
 import React from 'react';
 
 interface LandingPageProps {
-  onEnter: () => void;
+  onEnter?: () => void;
+  onGetStarted?: () => void;
 }
 
-const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
+const LandingPage: React.FC<LandingPageProps> = ({ onEnter, onGetStarted }) => {
+  const handleClick = onGetStarted || onEnter;
   return (
     <main className="w-full bg-black text-gray-100">
       {/* Hero Section */}
@@ -26,7 +28,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onEnter }) => {
           </p>
           <div className="mt-10 animate-fade-in-from-bottom animation-delay-600">
             <button
-              onClick={onEnter}
+              onClick={handleClick}
               className="px-8 py-4 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-semibold rounded-lg shadow-lg hover:shadow-purple-500/30 transform hover:scale-105 transition-all duration-300 focus:outline-none focus:ring-4 focus:ring-purple-400 focus:ring-opacity-50"
             >
               Acessar a Plataforma

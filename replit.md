@@ -81,6 +81,7 @@ npm run dev
   - **Admin Role**: teste@gmail.com configured as admin in database
   - **Backend Endpoints**: /api/ai/gemini-chat, /api/ai/chat-with-fallback, /api/ai/openai-chat
   - **SSE Streaming**: Fixed streaming response parsing with proper buffer management
+  - **Fixed Google Gemini API**: Updated to correct @google/genai v1.28 syntax using `await ai.chats.create('gemini-2.0-flash', history, null)` and `chat.sendMessageStream(message)` with proper error handling
 
 ## Notes
 - This app was imported from AI Studio (https://ai.studio/apps/drive/16b5ElGbSprtdan1jbs4RNGAE78kxil0q)

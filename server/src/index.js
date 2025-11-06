@@ -420,6 +420,203 @@ app.post('/api/ai/chat-with-fallback', verifyToken, checkSubscription(db), async
   }
 });
 
+app.post('/api/ai/image-analysis', verifyToken, checkSubscription(db), async (req, res) => {
+  try {
+    const { imageData, prompt } = req.body;
+    
+    const { GoogleGenAI } = await import('@google/genai');
+    const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+    
+    const imagePart = {
+      inlineData: {
+        data: imageData.split(',')[1],
+        mimeType: imageData.split(':')[1].split(';')[0]
+      }
+    };
+    
+    const result = await ai.models.generateContent({
+      model: 'gemini-2.5-flash',
+      contents: { parts: [imagePart, { text: prompt }] },
+    });
+    
+    res.json({ text: result.text });
+  } catch (error) {
+    console.error('Image analysis error:', error);
+    res.status(500).json({ error: 'Failed to analyze image' });
+  }
+});
+
+app.post('/api/ai/image-generation', verifyToken, checkSubscription(db), async (req, res) => {
+  try {
+    const { prompt, imageData } = req.body;
+    
+    const { GoogleGenAI, Modality } = await import('@google/genai');
+    const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+    
+    const parts = [];
+    
+    if (imageData) {
+      parts.push({
+        inlineData: {
+          data: imageData.split(',')[1],
+          mimeType: imageData.split(':')[1].split(';')[0]
+        }
+      });
+    }
+    parts.push({ text: prompt });
+    
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-flash-image',
+      contents: { parts },
+      config: {
+        responseModalities: [Modality.IMAGE],
+      },
+    });
+    
+    for (const part of response.candidates[0].content.parts) {
+      if (part.inlineData) {
+        res.json({ imageData: part.inlineData.data });
+        return;
+      }
+    }
+    
+    throw new Error('No image returned');
+  } catch (error) {
+    console.error('Image generation error:', error);
+    res.status(500).json({ error: 'Failed to generate image' });
+  }
+});
+
+app.post('/api/ai/prompt-specialist', verifyToken, checkSubscription(db), async (req, res) => {
+  try {
+    const { idea, targetModel } = req.body;
+    
+    const systemInstruction = "Você é um especialista em engenharia de prompts para modelos de IA generativa de imagem e vídeo. Sua tarefa é pegar uma ideia simples do usuário e transformá-la em um prompt em inglês, extremamente detalhado e eficaz, otimizado para o modelo alvo (imagem ou vídeo).";
+    const userPrompt = `
+      Baseado na seguinte ideia simples: "${idea}", crie um prompt detalhado e otimizado para um modelo de IA que gera ${targetModel === 'image' ? 'imagens (como DALL-E 3, Midjourney, ou Nano Banana)' : 'vídeos (como Sora ou Veo)'}.
+
+      O prompt deve ser rico em detalhes, incluindo, quando aplicável:
+      - **Sujeito/Personagem:** Descrição detalhada da aparência, roupas, emoções.
+      - **Cenário/Ambiente:** Onde a cena se passa? É interno, externo, fantástico? Detalhes de fundo.
+      - **Composição da Cena:** Como os elementos estão arranjados? Close-up, plano geral, ângulo da câmera?
+      - **Iluminação:** Tipo de luz (ex: luz do amanhecer, luz de velas, neon, cinemática, dramática).
+      - **Paleta de Cores:** Cores dominantes, atmosfera (vibrante, sombria, pastel).
+      - **Estilo Artístico:** Fotorrealista, pintura a óleo, 3D render, anime, arte conceitual, etc.
+      - **Qualidade/Detalhes:** Especifique alta resolução, 4K, 8K, detalhes intrincados.
+      - **Para vídeos:** Adicione descrição da ação principal, movimento de câmera (ex: travelling, panning, aéreo), e a atmosfera/mood do vídeo.
+
+      O prompt final deve ser apenas o texto em INGLÊS, sem nenhuma introdução ou explicação sua. Apenas o prompt.
+    `;
+    
+    const { GoogleGenAI } = await import('@google/genai');
+    const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+    
+    const response = await ai.models.generateContent({
+      model: 'gemini-2.5-pro',
+      contents: userPrompt,
+      config: {
+        systemInstruction: systemInstruction,
+      }
+    });
+    
+    res.json({ text: response.text.trim() });
+  } catch (error) {
+    console.error('Prompt specialist error:', error);
+    res.status(500).json({ error: 'Failed to generate prompt' });
+  }
+});
+
+app.post('/api/ai/image-replicator', verifyToken, checkSubscription(db), async (req, res) => {
+  try {
+    const { imageData } = req.body;
+    
+    const { GoogleGenAI } = await import('@google/genai');
+    const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+    
+    const imagePart = {
+      inlineData: {
+        data: imageData.split(',')[1],
+        mimeType: imageData.split(':')[1].split(';')[0]
+      }
+    };
+    
+    const textPart = { 
+      text: "Analise esta imagem em detalhes e gere um prompt descritivo em inglês que possa ser usado em um modelo de texto para imagem (como Nano Banana ou Midjourney) para recriar uma imagem semelhante. Descreva o sujeito, cenário, estilo, composição, iluminação e cores. O resultado deve ser APENAS o prompt, sem nenhuma introdução ou texto adicional." 
+    };
+    
+    const result = await ai.models.generateContent({
+      model: 'gemini-2.5-pro',
+      contents: { parts: [imagePart, textPart] },
+    });
+    
+    res.json({ text: result.text.trim() });
+  } catch (error) {
+    console.error('Image replicator error:', error);
+    res.status(500).json({ error: 'Failed to generate prompt from image' });
+  }
+});
+
+app.post('/api/ai/video-generation', verifyToken, checkSubscription(db), async (req, res) => {
+  try {
+    const { prompt, imageData } = req.body;
+    
+    const { GoogleGenAI } = await import('@google/genai');
+    const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+    
+    const parts = [];
+    
+    if (imageData) {
+      parts.push({
+        inlineData: {
+          data: imageData.split(',')[1],
+          mimeType: imageData.split(':')[1].split(';')[0]
+        }
+      });
+    }
+    parts.push({ text: prompt });
+    
+    const operation = await ai.models.generateVideos({
+      model: 'veo-004',
+      prompt: parts,
+    });
+    
+    res.json({ operationName: operation.name });
+  } catch (error) {
+    console.error('Video generation error:', error);
+    res.status(500).json({ error: 'Failed to start video generation' });
+  }
+});
+
+app.post('/api/ai/video-status', verifyToken, checkSubscription(db), async (req, res) => {
+  try {
+    const { operationName } = req.body;
+    
+    const { GoogleGenAI } = await import('@google/genai');
+    const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
+    
+    const operation = await ai.operations.getVideosOperation({ 
+      operation: { name: operationName } 
+    });
+    
+    if (operation.done) {
+      const downloadLink = operation.response?.generatedVideos?.[0]?.video?.uri;
+      if (downloadLink) {
+        const videoResponse = await fetch(`${downloadLink}&key=${process.env.GOOGLE_API_KEY}`);
+        const buffer = await videoResponse.arrayBuffer();
+        const base64 = Buffer.from(buffer).toString('base64');
+        res.json({ done: true, videoData: base64 });
+      } else {
+        res.json({ done: true, error: 'No video link returned' });
+      }
+    } else {
+      res.json({ done: false });
+    }
+  } catch (error) {
+    console.error('Video status check error:', error);
+    res.status(500).json({ error: 'Failed to check video status' });
+  }
+});
+
 app.listen(PORT, () => {
   console.log(`Server running on port ${PORT}`);
   console.log(`Backend ready to accept connections`);

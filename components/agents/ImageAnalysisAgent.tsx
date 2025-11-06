@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { ArrowLeftIcon, UploadIcon, CloseIcon } from '../icons';
-import { GoogleGenAI } from '@google/genai';
 import HistorySidebar from '../HistorySidebar';
 import type { HistoryItem, AgentType } from '../../types';
 
@@ -96,21 +95,32 @@ const ImageAnalysisAgent: React.FC<AgentProps> = ({ onBack, history, addToHistor
         setSelectedHistoryId(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-            const imagePart = await fileToGenerativePart(image);
-            const textPart = { text: prompt };
-            const result = await ai.models.generateContent({
-                model: 'gemini-2.5-flash',
-                contents: { parts: [imagePart, textPart] },
-            });
-            setResponse(result.text);
-
             const inputImageBase64 = await fileToBase64(image);
+            
+            const response = await fetch('/api/ai/image-analysis', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    imageData: inputImageBase64,
+                    prompt: prompt
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to analyze image');
+            }
+
+            const data = await response.json();
+            setResponse(data.text);
+
             addToHistory({
                 agentType: 'analyzer',
                 prompt: prompt,
                 inputImage: inputImageBase64,
-                output: result.text,
+                output: data.text,
             });
 
         } catch (e) {

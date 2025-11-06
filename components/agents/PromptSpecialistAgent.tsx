@@ -1,6 +1,5 @@
 import React, { useState, useEffect } from 'react';
 import { ArrowLeftIcon, LightbulbIcon, CheckIcon } from '../icons';
-import { GoogleGenAI } from '@google/genai';
 import HistorySidebar from '../HistorySidebar';
 import type { HistoryItem, AgentType } from '../../types';
 
@@ -56,33 +55,25 @@ const PromptSpecialistAgent: React.FC<AgentProps> = ({ onBack, history, addToHis
         setGeneratedPrompt('');
         setSelectedHistoryId(null);
 
-        const systemInstruction = "Você é um especialista em engenharia de prompts para modelos de IA generativa de imagem e vídeo. Sua tarefa é pegar uma ideia simples do usuário e transformá-la em um prompt em inglês, extremamente detalhado e eficaz, otimizado para o modelo alvo (imagem ou vídeo).";
-        const userPrompt = `
-            Baseado na seguinte ideia simples: "${idea}", crie um prompt detalhado e otimizado para um modelo de IA que gera ${targetModel === 'image' ? 'imagens (como DALL-E 3, Midjourney, ou Nano Banana)' : 'vídeos (como Sora ou Veo)'}.
-
-            O prompt deve ser rico em detalhes, incluindo, quando aplicável:
-            - **Sujeito/Personagem:** Descrição detalhada da aparência, roupas, emoções.
-            - **Cenário/Ambiente:** Onde a cena se passa? É interno, externo, fantástico? Detalhes de fundo.
-            - **Composição da Cena:** Como os elementos estão arranjados? Close-up, plano geral, ângulo da câmera?
-            - **Iluminação:** Tipo de luz (ex: luz do amanhecer, luz de velas, neon, cinemática, dramática).
-            - **Paleta de Cores:** Cores dominantes, atmosfera (vibrante, sombria, pastel).
-            - **Estilo Artístico:** Fotorrealista, pintura a óleo, 3D render, anime, arte conceitual, etc.
-            - **Qualidade/Detalhes:** Especifique alta resolução, 4K, 8K, detalhes intrincados.
-            - **Para vídeos:** Adicione descrição da ação principal, movimento de câmera (ex: travelling, panning, aéreo), e a atmosfera/mood do vídeo.
-
-            O prompt final deve ser apenas o texto em INGLÊS, sem nenhuma introdução ou explicação sua. Apenas o prompt.
-        `;
-
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-pro',
-                contents: userPrompt,
-                config: {
-                  systemInstruction: systemInstruction,
-                }
+            const response = await fetch('/api/ai/prompt-specialist', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    idea: idea,
+                    targetModel: targetModel
+                })
             });
-            const newPrompt = response.text.trim();
+
+            if (!response.ok) {
+                throw new Error('Failed to generate prompt');
+            }
+
+            const data = await response.json();
+            const newPrompt = data.text;
             setGeneratedPrompt(newPrompt);
             addToHistory({
                 agentType: 'promptSpecialist',

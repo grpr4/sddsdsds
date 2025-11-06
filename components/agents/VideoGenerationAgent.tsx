@@ -1,7 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { ArrowLeftIcon, VideoCameraIcon, DownloadIcon, UploadIcon, CloseIcon } from '../icons';
-import { GoogleGenAI } from '@google/genai';
-import type { GenerateVideosOperation } from '@google/genai';
 import HistorySidebar from '../HistorySidebar';
 import type { HistoryItem, AgentType } from '../../types';
 
@@ -39,19 +37,13 @@ const VideoGenerationAgent: React.FC<AgentProps> = ({ onBack, history, addToHist
     const [isLoading, setIsLoading] = useState(false);
     const [loadingMessage, setLoadingMessage] = useState(loadingMessages[0]);
     const [error, setError] = useState<string | null>(null);
-    const [apiKeySelected, setApiKeySelected] = useState(false);
     const [selectedHistoryId, setSelectedHistoryId] = useState<number | null>(null);
+    const [operationName, setOperationName] = useState<string | null>(null);
     
     const pollingRef = useRef<number | null>(null);
     const fileInputRef = useRef<HTMLInputElement>(null);
 
     useEffect(() => {
-        const checkKey = async () => {
-            if (window.aistudio && await window.aistudio.hasSelectedApiKey()) {
-                setApiKeySelected(true);
-            }
-        };
-        checkKey();
         return () => {
             if (pollingRef.current) clearTimeout(pollingRef.current);
             if (videoUrl && videoUrl.startsWith('blob:')) URL.revokeObjectURL(videoUrl);
@@ -90,13 +82,6 @@ const VideoGenerationAgent: React.FC<AgentProps> = ({ onBack, history, addToHist
         setVideoUrl(item.output);
         setImagePreview(item.inputImage || null);
         setSelectedHistoryId(item.id);
-    };
-    
-    const handleSelectKey = async () => {
-        if (window.aistudio) {
-            await window.aistudio.openSelectKey();
-            setApiKeySelected(true);
-        }
     };
 
     const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -142,17 +127,28 @@ const VideoGenerationAgent: React.FC<AgentProps> = ({ onBack, history, addToHist
         document.body.removeChild(link);
     };
 
-    const pollOperation = async (operation: GenerateVideosOperation, currentPrompt: string, currentInputImageBase64?: string) => {
+    const pollOperation = async (opName: string, currentPrompt: string, currentInputImageBase64?: string) => {
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-            const updatedOperation = await ai.operations.getVideosOperation({ operation });
+            const response = await fetch('/api/ai/video-status', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    operationName: opName
+                })
+            });
 
-            if (updatedOperation.done) {
-                const downloadLink = updatedOperation.response?.generatedVideos?.[0]?.video?.uri;
-                if (downloadLink) {
-                    const videoResponse = await fetch(`${downloadLink}&key=${process.env.API_KEY}`);
-                    if (!videoResponse.ok) throw new Error('Falha ao baixar o vídeo gerado.');
-                    const blob = await videoResponse.blob();
+            if (!response.ok) {
+                throw new Error('Failed to check video status');
+            }
+
+            const data = await response.json();
+
+            if (data.done) {
+                if (data.videoData) {
+                    const blob = new Blob([Uint8Array.from(atob(data.videoData), c => c.charCodeAt(0))], { type: 'video/mp4' });
                     const url = URL.createObjectURL(blob);
                     setVideoUrl(url);
                     addToHistory({
@@ -162,20 +158,15 @@ const VideoGenerationAgent: React.FC<AgentProps> = ({ onBack, history, addToHist
                         output: url,
                     });
                 } else {
-                    throw new Error('Operação concluída, mas nenhum link de vídeo foi retornado.');
+                    throw new Error('Operação concluída, mas nenhum vídeo foi retornado.');
                 }
                 setIsLoading(false);
             } else {
-                pollingRef.current = window.setTimeout(() => pollOperation(updatedOperation, currentPrompt, currentInputImageBase64), 10000);
+                pollingRef.current = window.setTimeout(() => pollOperation(opName, currentPrompt, currentInputImageBase64), 10000);
             }
         } catch (e: any) {
             console.error(e);
-            let errorMessage = 'Ocorreu um erro durante a geração do vídeo. Tente novamente.';
-            if (e.message?.includes('Requested entity was not found')) {
-                 errorMessage = 'A chave de API não foi encontrada ou é inválida. Por favor, selecione uma chave de API válida.';
-                 setApiKeySelected(false);
-            }
-            setError(errorMessage);
+            setError('Ocorreu um erro durante a geração do vídeo. Tente novamente.');
             setIsLoading(false);
         }
     };
@@ -185,13 +176,6 @@ const VideoGenerationAgent: React.FC<AgentProps> = ({ onBack, history, addToHist
             setError('Por favor, insira uma descrição ou envie uma imagem.');
             return;
         }
-        const isKeySelected = window.aistudio && await window.aistudio.hasSelectedApiKey();
-        if (!isKeySelected) {
-            setError('Por favor, selecione uma chave de API para continuar.');
-            setApiKeySelected(false);
-            return;
-        }
-        setApiKeySelected(true);
 
         if (videoUrl && videoUrl.startsWith('blob:')) URL.revokeObjectURL(videoUrl);
         setVideoUrl(null);
@@ -201,52 +185,37 @@ const VideoGenerationAgent: React.FC<AgentProps> = ({ onBack, history, addToHist
         setLoadingMessage(loadingMessages[0]);
         
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-            
-            const payload: any = {
-                model: 'veo-3.1-fast-generate-preview',
-                prompt: prompt,
-                config: { numberOfVideos: 1, resolution: '720p', aspectRatio: '16:9' }
-            };
             let inputImageBase64: string | undefined = undefined;
 
             if (imageFile) {
                 inputImageBase64 = await fileToBase64(imageFile);
-                payload.image = {
-                    imageBytes: inputImageBase64.split(',')[1],
-                    mimeType: imageFile.type,
-                };
             }
 
-            const operation = await ai.models.generateVideos(payload);
-            pollOperation(operation, prompt, inputImageBase64);
+            const response = await fetch('/api/ai/video-generation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    prompt: prompt,
+                    imageData: inputImageBase64
+                })
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to start video generation');
+            }
+
+            const data = await response.json();
+            setOperationName(data.operationName);
+            pollOperation(data.operationName, prompt, inputImageBase64);
         } catch (e: any) {
             console.error(e);
-            let errorMessage = 'Falha ao iniciar a geração do vídeo. Verifique o console para detalhes.';
-             if (e.message?.includes('Requested entity was not found')) {
-                 errorMessage = 'A chave de API não foi encontrada ou é inválida. Por favor, selecione uma chave de API válida.';
-                 setApiKeySelected(false);
-            }
-            setError(errorMessage);
+            setError('Falha ao iniciar a geração do vídeo. Verifique o console para detalhes.');
             setIsLoading(false);
         }
     };
-    
-    if (!apiKeySelected) {
-        return (
-            <div className="animate-fade-in max-w-2xl mx-auto text-center p-8 bg-black border border-zinc-800 rounded-xl">
-                 <VideoCameraIcon className="w-16 h-16 mx-auto mb-4 text-zinc-500" />
-                 <h2 className="text-2xl font-bold text-white mb-2">Chave de API Necessária</h2>
-                 <p className="text-zinc-400 mb-6">A geração de vídeo com Veo requer uma chave de API com faturamento habilitado. Por favor, selecione sua chave para continuar.</p>
-                 <p className="text-sm text-zinc-500 mb-6">Para mais informações, consulte a <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" rel="noopener noreferrer" className="underline hover:text-zinc-300">documentação de faturamento</a>.</p>
-                 {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
-                 <button onClick={handleSelectKey} className="px-6 py-2.5 font-semibold text-white bg-zinc-800 rounded-lg hover:bg-zinc-700 transition-colors focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-black focus:ring-zinc-500">
-                    Selecionar Chave de API
-                 </button>
-                 <button onClick={onBack} className="mt-4 text-sm text-zinc-400 hover:text-white">Voltar</button>
-            </div>
-        )
-    }
 
     return (
         <div className="animate-fade-in">

@@ -1,7 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
 import { ArrowLeftIcon, SparklesIcon, UploadIcon, CloseIcon, DownloadIcon } from '../icons';
-import { GoogleGenAI, Modality } from '@google/genai';
-import type { Part } from '@google/genai';
 import HistorySidebar from '../HistorySidebar';
 import type { HistoryItem, AgentType } from '../../types';
 
@@ -96,45 +94,37 @@ const ImageGenerationAgent: React.FC<AgentProps> = ({ onBack, history, addToHist
         setSelectedHistoryId(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-            
-            const parts: Part[] = [];
             let inputImageBase64: string | undefined = undefined;
 
             if(uploadedImageFile) {
                 inputImageBase64 = await fileToBase64(uploadedImageFile);
-                parts.push({ 
-                    inlineData: { 
-                        data: inputImageBase64.split(',')[1], 
-                        mimeType: uploadedImageFile.type 
-                    } 
-                });
             }
-            parts.push({ text: prompt });
 
-            const response = await ai.models.generateContent({
-                model: 'gemini-2.5-flash-image',
-                contents: { parts },
-                config: {
-                    responseModalities: [Modality.IMAGE],
+            const response = await fetch('/api/ai/image-generation', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
                 },
+                body: JSON.stringify({
+                    prompt: prompt,
+                    imageData: inputImageBase64
+                })
             });
 
-            for (const part of response.candidates[0].content.parts) {
-                if (part.inlineData) {
-                    const base64ImageBytes: string = part.inlineData.data;
-                    const imageUrl = `data:image/png;base64,${base64ImageBytes}`;
-                    setGeneratedImage(imageUrl);
-                    addToHistory({
-                        agentType: 'generator',
-                        prompt: prompt,
-                        inputImage: inputImageBase64,
-                        output: imageUrl,
-                    });
-                    return;
-                }
+            if (!response.ok) {
+                throw new Error('Failed to generate image');
             }
-            throw new Error("Nenhuma imagem foi retornada pela API.");
+
+            const data = await response.json();
+            const imageUrl = `data:image/png;base64,${data.imageData}`;
+            setGeneratedImage(imageUrl);
+            addToHistory({
+                agentType: 'generator',
+                prompt: prompt,
+                inputImage: inputImageBase64,
+                output: imageUrl,
+            });
 
         } catch (e) {
             console.error(e);

@@ -1,6 +1,5 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { ArrowLeftIcon, UploadIcon, CloseIcon, CheckIcon, ReplicateIcon } from '../icons';
-import { GoogleGenAI } from '@google/genai';
 import HistorySidebar from '../HistorySidebar';
 import type { HistoryItem, AgentType } from '../../types';
 
@@ -101,22 +100,30 @@ const ImageReplicatorAgent: React.FC<AgentProps> = ({ onBack, history, addToHist
         setSelectedHistoryId(null);
 
         try {
-            const ai = new GoogleGenAI({ apiKey: process.env.API_KEY as string });
-            const imagePart = await fileToGenerativePart(image);
-            const textPart = { text: "Analise esta imagem em detalhes e gere um prompt descritivo em inglês que possa ser usado em um modelo de texto para imagem (como Nano Banana ou Midjourney) para recriar uma imagem semelhante. Descreva o sujeito, cenário, estilo, composição, iluminação e cores. O resultado deve ser APENAS o prompt, sem nenhuma introdução ou texto adicional." };
+            const inputImageBase64 = await fileToBase64(image);
             
-            const result = await ai.models.generateContent({
-                model: 'gemini-2.5-pro',
-                contents: { parts: [imagePart, textPart] },
+            const response = await fetch('/api/ai/image-replicator', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('token')}`
+                },
+                body: JSON.stringify({
+                    imageData: inputImageBase64
+                })
             });
 
-            const newPrompt = result.text.trim();
+            if (!response.ok) {
+                throw new Error('Failed to generate prompt from image');
+            }
+
+            const data = await response.json();
+            const newPrompt = data.text;
             setResponsePrompt(newPrompt);
 
-            const inputImageBase64 = await fileToBase64(image);
             addToHistory({
                 agentType: 'imageReplicator',
-                prompt: image.name, // Use file name as prompt for history
+                prompt: image.name,
                 inputImage: inputImageBase64,
                 output: newPrompt,
             });

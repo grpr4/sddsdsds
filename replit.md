@@ -74,7 +74,7 @@ npm run dev
   - Fixed VideoPlayerView black screen by correcting prop name (video → initialVideo)
   - Implemented comments functionality in CommunityView with full UI and state management
   - Added OpenAI integration with GPT-4o chat agent
-  - Implemented video progress persistence using localStorage
+  - **Lesson Progress System**: Migrated from localStorage to backend database (lesson_progress table), progress now properly scoped per user and lesson, fixing issue where completing a lesson in one course would mark it in all courses
   - Now features dual AI chat: Google Gemini and OpenAI GPT
   - **Secure AI Integration**: Moved API keys from frontend to backend (secure)
   - **Automatic Fallback**: Chat uses Google Gemini first, automatically falls back to OpenAI if Google fails
@@ -82,6 +82,7 @@ npm run dev
   - **Backend Endpoints**: /api/ai/gemini-chat, /api/ai/chat-with-fallback, /api/ai/openai-chat
   - **SSE Streaming**: Fixed streaming response parsing with proper buffer management
   - **Fixed Google Gemini API**: Updated to correct @google/genai v1.28 syntax using `await ai.chats.create('gemini-2.0-flash', history, null)` and `chat.sendMessageStream(message)` with proper error handling
+  - **Fixed AI Communication Error**: Resolved "Ocorreu um erro ao comunicar com a IA" by ensuring test user has active subscription (required by checkSubscription middleware)
 
 ## Notes
 - This app was imported from AI Studio (https://ai.studio/apps/drive/16b5ElGbSprtdan1jbs4RNGAE78kxil0q)

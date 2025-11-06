@@ -6,12 +6,10 @@ import type { ViewType, AgentType, User } from '../types';
 interface SidebarWrapperProps {
   currentView: ViewType;
   onViewChange: (view: ViewType) => void;
-  onAgentSelect: (agent: AgentType) => void;
-  selectedAgent: AgentType | null;
   isAdmin: boolean;
 }
 
-export default function SidebarWrapper({ currentView, onViewChange, onAgentSelect, selectedAgent, isAdmin }: SidebarWrapperProps) {
+export default function SidebarWrapper({ currentView, onViewChange, isAdmin }: SidebarWrapperProps) {
   const [isCollapsed, setIsCollapsed] = useState(false);
   const { user, logout } = useAuth();
 

@@ -21,7 +21,6 @@ function App() {
   const [showLogin, setShowLogin] = useState(false);
   const [showPaywall, setShowPaywall] = useState(false);
   const [currentView, setCurrentView] = useState<ViewType>('conteudo');
-  const [selectedAgent, setSelectedAgent] = useState<AgentType | null>(null);
   const [selectedCourse, setSelectedCourse] = useState<{ video: Video; playlist: Video[] } | null>(null);
 
   if (authLoading) {
@@ -44,21 +43,11 @@ function App() {
     );
   }
 
-  const handleAgentSelect = (agent: AgentType) => {
-    if (!hasSubscription) {
-      setShowPaywall(true);
-      return;
-    }
-    setSelectedAgent(agent);
-    setCurrentView('agentes');
-  };
-
   const handleViewChange = (view: ViewType) => {
     if (view === 'admin' && user.role !== 'admin') {
       return;
     }
     setCurrentView(view);
-    setSelectedAgent(null);
     setSelectedCourse(null);
   };
 
@@ -73,17 +62,7 @@ function App() {
 
     switch (currentView) {
       case 'agentes':
-        return selectedAgent ? (
-          <AgentView 
-            agentType={selectedAgent}
-            onBack={() => setSelectedAgent(null)}
-          />
-        ) : (
-          <div className="p-8">
-            <h2 className="text-2xl font-bold mb-4">Selecione um Agente</h2>
-            <p className="text-gray-400">Escolha um agente no menu lateral</p>
-          </div>
-        );
+        return <AgentView />;
       case 'conteudo':
         if (coursesLoading) {
           return (
@@ -129,8 +108,6 @@ function App() {
       <SidebarWrapper 
         currentView={currentView}
         onViewChange={handleViewChange}
-        onAgentSelect={handleAgentSelect}
-        selectedAgent={selectedAgent}
         isAdmin={user.role === 'admin'}
       />
       

@@ -81,7 +81,11 @@ npm run dev
   - **Admin Role**: teste@gmail.com configured as admin in database
   - **Backend Endpoints**: /api/ai/gemini-chat, /api/ai/chat-with-fallback, /api/ai/openai-chat
   - **SSE Streaming**: Fixed streaming response parsing with proper buffer management
-  - **Fixed Google Gemini API**: Updated to correct @google/genai v1.28 syntax using `await ai.chats.create('gemini-2.0-flash', history, null)` and `chat.sendMessageStream(message)` with proper error handling
+  - **Fixed Google Gemini API (2025-11-06)**: Completely migrated to @google/genai v1.28 package with correct API usage:
+    - Uses `ai.models.generateContentStream()` for streaming chat responses
+    - All contents properly formatted with `[{ role: 'user', parts: [...] }]` schema
+    - Fixed all AI endpoints to work with the new SDK (chat, image analysis, image generation, video generation, prompt specialist, image replicator)
+    - Verified all agents are now functional with proper API integration
   - **Fixed AI Communication Error**: Resolved "Ocorreu um erro ao comunicar com a IA" by ensuring test user has active subscription (required by checkSubscription middleware)
   - **Removed OpenAI Chat Agent**: Removed the standalone "Chat com GPT" agent from AgentView as requested, keeping only Google Gemini-based agents
   - **Secure Google AI Agents**: Migrated all Google AI agent operations to backend endpoints to protect API keys:

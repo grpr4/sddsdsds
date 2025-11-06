@@ -18,27 +18,38 @@ const VideoPlayerView: React.FC<VideoPlayerViewProps> = ({ initialVideo, playlis
   }, [initialVideo]);
 
   useEffect(() => {
-    const saved = localStorage.getItem('video_progress');
-    if (saved) {
-      try {
-        const progress = JSON.parse(saved);
-        setCompletedVideos(new Set(progress));
-      } catch (e) {
-        console.error('Failed to load progress:', e);
-      }
-    }
-  }, []);
+    const completedIds = playlist
+      .filter(video => (video as any).completed === 1)
+      .map(video => video.id);
+    setCompletedVideos(new Set(completedIds));
+  }, [playlist]);
 
-  const handleToggleComplete = (videoId: number) => {
+  const handleToggleComplete = async (videoId: number) => {
+    const isCompleted = completedVideos.has(videoId);
     const newCompleted = new Set(completedVideos);
-    if (newCompleted.has(videoId)) {
+    
+    if (isCompleted) {
       newCompleted.delete(videoId);
     } else {
       newCompleted.add(videoId);
     }
+    
     setCompletedVideos(newCompleted);
     
-    localStorage.setItem('video_progress', JSON.stringify(Array.from(newCompleted)));
+    try {
+      await axios.post(
+        `/api/lessons/${videoId}/complete`, 
+        { completed: !isCompleted },
+        {
+          headers: {
+            'Authorization': `Bearer ${localStorage.getItem('token')}`
+          }
+        }
+      );
+    } catch (error) {
+      console.error('Failed to update lesson progress:', error);
+      setCompletedVideos(new Set(completedVideos));
+    }
   };
   
   const isCurrentVideoCompleted = completedVideos.has(currentVideo.id);

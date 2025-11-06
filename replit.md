@@ -83,6 +83,15 @@ npm run dev
   - **SSE Streaming**: Fixed streaming response parsing with proper buffer management
   - **Fixed Google Gemini API**: Updated to correct @google/genai v1.28 syntax using `await ai.chats.create('gemini-2.0-flash', history, null)` and `chat.sendMessageStream(message)` with proper error handling
   - **Fixed AI Communication Error**: Resolved "Ocorreu um erro ao comunicar com a IA" by ensuring test user has active subscription (required by checkSubscription middleware)
+  - **Removed OpenAI Chat Agent**: Removed the standalone "Chat com GPT" agent from AgentView as requested, keeping only Google Gemini-based agents
+  - **Secure Google AI Agents**: Migrated all Google AI agent operations to backend endpoints to protect API keys:
+    - /api/ai/image-analysis - Analyzes images using Gemini Vision
+    - /api/ai/image-generation - Generates images using Imagen
+    - /api/ai/prompt-specialist - Improves prompts using Gemini
+    - /api/ai/image-replicator - Generates prompts from images using Gemini Vision
+    - /api/ai/video-generation - Initiates video generation using Veo
+    - /api/ai/video-status - Polls video generation status
+  - **Frontend-Backend Architecture**: All AI agents now communicate through secure backend endpoints instead of direct browser-to-API calls, preventing exposure of GOOGLE_API_KEY in the frontend
 
 ## Notes
 - This app was imported from AI Studio (https://ai.studio/apps/drive/16b5ElGbSprtdan1jbs4RNGAE78kxil0q)

@@ -329,11 +329,16 @@ app.post('/api/ai/gemini-chat', verifyToken, checkSubscription(db), async (req, 
     
     const contents = [];
     if (history && history.length > 0) {
-      contents.push(...history);
+      for (const msg of history) {
+        contents.push({
+          role: msg.role,
+          parts: msg.parts || [{ text: msg.content || '' }]
+        });
+      }
     }
     contents.push({ role: 'user', parts: [{ text: message }] });
     
-    const stream = await ai.models.generateContentStream({
+    const response = await ai.models.generateContentStream({
       model: 'gemini-2.0-flash',
       contents: contents,
     });
@@ -342,7 +347,7 @@ app.post('/api/ai/gemini-chat', verifyToken, checkSubscription(db), async (req, 
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
-    for await (const chunk of stream) {
+    for await (const chunk of response) {
       if (chunk.text) {
         res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
       }
@@ -366,11 +371,16 @@ app.post('/api/ai/chat-with-fallback', verifyToken, checkSubscription(db), async
       
       const contents = [];
       if (history && history.length > 0) {
-        contents.push(...history);
+        for (const msg of history) {
+          contents.push({
+            role: msg.role,
+            parts: msg.parts || [{ text: msg.content || '' }]
+          });
+        }
       }
       contents.push({ role: 'user', parts: [{ text: message }] });
       
-      const stream = await ai.models.generateContentStream({
+      const response = await ai.models.generateContentStream({
         model: 'gemini-2.0-flash',
         contents: contents,
       });
@@ -379,7 +389,7 @@ app.post('/api/ai/chat-with-fallback', verifyToken, checkSubscription(db), async
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
 
-      for await (const chunk of stream) {
+      for await (const chunk of response) {
         if (chunk.text) {
           res.write(`data: ${JSON.stringify({ text: chunk.text, provider: 'google' })}\n\n`);
         }
@@ -398,7 +408,7 @@ app.post('/api/ai/chat-with-fallback', verifyToken, checkSubscription(db), async
       const messages = [
         ...(history || []).map(msg => ({
           role: msg.role === 'model' ? 'assistant' : msg.role,
-          content: msg.parts[0].text
+          content: msg.parts?.[0]?.text || msg.content || ''
         })),
         { role: 'user', content: message }
       ];
@@ -448,7 +458,7 @@ app.post('/api/ai/image-analysis', verifyToken, checkSubscription(db), async (re
     
     const result = await ai.models.generateContent({
       model: 'gemini-2.5-flash',
-      contents: { parts: [imagePart, { text: prompt }] },
+      contents: [{ role: 'user', parts: [imagePart, { text: prompt }] }],
     });
     
     res.json({ text: result.text });
@@ -479,7 +489,7 @@ app.post('/api/ai/image-generation', verifyToken, checkSubscription(db), async (
     
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-flash-image',
-      contents: { parts },
+      contents: [{ role: 'user', parts }],
       config: {
         responseModalities: [Modality.IMAGE],
       },
@@ -525,10 +535,8 @@ app.post('/api/ai/prompt-specialist', verifyToken, checkSubscription(db), async 
     
     const response = await ai.models.generateContent({
       model: 'gemini-2.5-pro',
-      contents: userPrompt,
-      config: {
-        systemInstruction: systemInstruction,
-      }
+      systemInstruction: systemInstruction,
+      contents: [{ role: 'user', parts: [{ text: userPrompt }] }],
     });
     
     res.json({ text: response.text.trim() });
@@ -558,7 +566,7 @@ app.post('/api/ai/image-replicator', verifyToken, checkSubscription(db), async (
     
     const result = await ai.models.generateContent({
       model: 'gemini-2.5-pro',
-      contents: { parts: [imagePart, textPart] },
+      contents: [{ role: 'user', parts: [imagePart, textPart] }],
     });
     
     res.json({ text: result.text.trim() });
@@ -589,7 +597,7 @@ app.post('/api/ai/video-generation', verifyToken, checkSubscription(db), async (
     
     const operation = await ai.models.generateVideos({
       model: 'veo-004',
-      prompt: parts,
+      prompt: [{ role: 'user', parts }],
     });
     
     res.json({ operationName: operation.name });

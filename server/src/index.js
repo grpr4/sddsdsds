@@ -327,19 +327,25 @@ app.post('/api/ai/gemini-chat', verifyToken, checkSubscription(db), async (req, 
     const { GoogleGenAI } = await import('@google/genai');
     const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
     
-    const chat = await ai.chats.create('gemini-2.0-flash', history || null, null);
-
-    const stream = chat.sendMessageStream(message);
+    const contents = [];
+    if (history && history.length > 0) {
+      contents.push(...history);
+    }
+    contents.push({ role: 'user', parts: [{ text: message }] });
+    
+    const stream = await ai.models.generateContentStream({
+      model: 'gemini-2.0-flash',
+      contents: contents,
+    });
     
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
 
     for await (const chunk of stream) {
-      if (chunk.error) {
-        throw new Error(chunk.error);
+      if (chunk.text) {
+        res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
       }
-      res.write(`data: ${JSON.stringify({ text: chunk.text })}\n\n`);
     }
     
     res.write('data: [DONE]\n\n');
@@ -358,19 +364,25 @@ app.post('/api/ai/chat-with-fallback', verifyToken, checkSubscription(db), async
       const { GoogleGenAI } = await import('@google/genai');
       const ai = new GoogleGenAI({ apiKey: process.env.GOOGLE_API_KEY });
       
-      const chat = await ai.chats.create('gemini-2.0-flash', history || null, null);
-
-      const stream = chat.sendMessageStream(message);
+      const contents = [];
+      if (history && history.length > 0) {
+        contents.push(...history);
+      }
+      contents.push({ role: 'user', parts: [{ text: message }] });
+      
+      const stream = await ai.models.generateContentStream({
+        model: 'gemini-2.0-flash',
+        contents: contents,
+      });
       
       res.setHeader('Content-Type', 'text/event-stream');
       res.setHeader('Cache-Control', 'no-cache');
       res.setHeader('Connection', 'keep-alive');
 
       for await (const chunk of stream) {
-        if (chunk.error) {
-          throw new Error(chunk.error);
+        if (chunk.text) {
+          res.write(`data: ${JSON.stringify({ text: chunk.text, provider: 'google' })}\n\n`);
         }
-        res.write(`data: ${JSON.stringify({ text: chunk.text, provider: 'google' })}\n\n`);
       }
       
       res.write('data: [DONE]\n\n');
